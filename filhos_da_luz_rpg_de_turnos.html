@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Filhos da Luz - RPG de Turnos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            title: ['Cinzel', 'serif'],
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+          },
+          colors: {
+            skyGold: '#f6d365',
+            skyAmber: '#fda085',
+            skyCyan: '#38ef7d',
+            skyDark: '#0f172a',
+            skyCard: 'rgba(30, 41, 59, 0.75)',
+            skyBorder: 'rgba(246, 211, 101, 0.25)',
+          },
+          boxShadow: {
+            glowGold: '0 0 25px rgba(246, 211, 101, 0.4)',
+            glowCyan: '0 0 25px rgba(56, 239, 125, 0.3)',
+            glowRed: '0 0 25px rgba(239, 68, 68, 0.4)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 70%, #020617 100%);
+      color: #f8fafc;
+      overflow-x: hidden;
+      min-height: 100vh;
+      user-select: none;
+    }
+
+    /* Glassmorphism Styling */
+    .glass-panel {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    .glass-panel-gold {
+      background: rgba(45, 35, 20, 0.75);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(246, 211, 101, 0.3);
+      box-shadow: 0 8px 32px 0 rgba(246, 211, 101, 0.15);
+    }
+
+    /* Particle Background Canvas */
+    #particle-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Combat Animations */
+    @keyframes attackRight {
+      0% { transform: translateX(0) scale(1); }
+      40% { transform: translateX(80px) scale(1.1); }
+      100% { transform: translateX(0) scale(1); }
+    }
+
+    @keyframes attackLeft {
+      0% { transform: translateX(0) scale(1); }
+      40% { transform: translateX(-80px) scale(1.1); }
+      100% { transform: translateX(0) scale(1); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translate(0, 0); }
+      20% { transform: translate(-8px, 6px); }
+      40% { transform: translate(8px, -6px); }
+      60% { transform: translate(-6px, -4px); }
+      80% { transform: translate(6px, 4px); }
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+    }
+
+    .anim-attack-p1 { animation: attackRight 0.45s ease-in-out; }
+    .anim-attack-p2 { animation: attackLeft 0.45s ease-in-out; }
+    .anim-damage { animation: shake 0.4s ease-in-out; }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(246, 211, 101, 0.4); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(246, 211, 101, 0.7); }
+
+    .stat-bar-fill {
+      transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+  </style>
+</head>
+<body class="font-sans antialiased text-slate-100 flex flex-col justify-between min-h-screen relative overflow-y-auto">
+
+  <!-- Canvas de partículas celestiais -->
+  <canvas id="particle-canvas"></canvas>
+
+  <div class="relative z-10 flex flex-col min-h-screen">
+    
+    <!-- Header / Navbar -->
+    <header class="w-full p-4 border-b border-slate-800/80 glass-panel flex justify-between items-center px-6">
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-sun text-amber-400 text-2xl animate-spin-slow"></i>
+        <h1 class="font-title text-2xl font-bold tracking-wider bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 bg-clip-text text-transparent">
+          FILHOS DA LUZ
+        </h1>
+      </div>
+      <div class="flex items-center gap-4">
+        <button id="sound-toggle" class="px-3 py-1.5 rounded-lg border border-amber-400/30 bg-slate-800/60 hover:bg-slate-700/60 transition text-amber-300 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-volume-high"></i> <span>Som: ON</span>
+        </button>
+        <button id="btn-back-home" class="px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800/60 hover:bg-slate-700/60 transition text-slate-300 text-sm hidden flex items-center gap-2">
+          <i class="fa-solid fa-house"></i> <span>Menu</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-grow flex items-center justify-center p-4 md:p-8">
+      
+      <!-- SCREEN 1: MAIN MENU -->
+      <section id="screen-menu" class="w-full max-w-4xl text-center space-y-8 py-8 animate-fade-in">
+        <div class="space-y-4">
+          <div class="inline-block px-4 py-1 rounded-full border border-amber-400/30 bg-amber-400/10 text-amber-300 text-sm font-semibold uppercase tracking-widest">
+            Universo de Luz & Sombras
+          </div>
+          <h2 class="font-title text-4xl md:text-6xl font-extrabold tracking-wide text-slate-100">
+            Duelo Celestial de Turnos
+          </h2>
+          <p class="text-slate-400 max-w-2xl mx-auto text-base md:text-lg">
+            Escolha seu Guardião da Luz ou da Penumbra. Domine habilidades elementares, escudos de luz e artes sombrias em combates táticos.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto pt-4">
+          <!-- PvE Card -->
+          <div onclick="selectMode('pve')" class="glass-panel p-6 rounded-2xl border border-amber-400/20 hover:border-amber-400/60 cursor-pointer transform hover:-translate-y-1.5 transition-all duration-300 group text-left relative overflow-hidden">
+            <div class="absolute -right-6 -bottom-6 text-amber-400/10 text-9xl group-hover:text-amber-400/20 transition">
+              <i class="fa-solid fa-robot"></i>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-amber-400/20 flex items-center justify-center text-amber-300 text-2xl mb-4 group-hover:scale-110 transition">
+              <i class="fa-solid fa-brain"></i>
+            </div>
+            <h3 class="font-title text-2xl font-bold text-amber-200 mb-2">Modo PvE (Treino)</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              Enfrente um Guardião Inteligente (IA) para praticar combos, gerenciar iniciativas e dominar mecânicas.
+            </p>
+            <div class="mt-6 flex items-center text-amber-300 font-semibold text-sm group-hover:translate-x-2 transition">
+              Iniciar Treino <i class="fa-solid fa-arrow-right ml-2"></i>
+            </div>
+          </div>
+
+          <!-- PvP Card -->
+          <div onclick="selectMode('pvp')" class="glass-panel p-6 rounded-2xl border border-skyCyan/20 hover:border-skyCyan/60 cursor-pointer transform hover:-translate-y-1.5 transition-all duration-300 group text-left relative overflow-hidden">
+            <div class="absolute -right-6 -bottom-6 text-emerald-400/10 text-9xl group-hover:text-emerald-400/20 transition">
+              <i class="fa-solid fa-users"></i>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-emerald-400/20 flex items-center justify-center text-emerald-300 text-2xl mb-4 group-hover:scale-110 transition">
+              <i class="fa-solid fa-swords"></i>
+            </div>
+            <h3 class="font-title text-2xl font-bold text-emerald-200 mb-2">Modo PvP (1 vs 1)</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              Desafie um amigo no mesmo dispositivo. Escolham seus personagens e travem um duelo tático por turnos.
+            </p>
+            <div class="mt-6 flex items-center text-emerald-300 font-semibold text-sm group-hover:translate-x-2 transition">
+              Iniciar Duelo <i class="fa-solid fa-arrow-right ml-2"></i>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 2: CHARACTER SELECTION -->
+      <section id="screen-select" class="w-full max-w-6xl space-y-6 hidden animate-fade-in">
+        <div class="text-center space-y-2">
+          <h2 id="select-title" class="font-title text-3xl md:text-4xl font-bold text-amber-300">
+            Jogador 1: Escolha seu Personagem
+          </h2>
+          <p class="text-slate-400 text-sm">Analise os atributos de Vida, Ataque, Iniciativa e Armadura.</p>
+        </div>
+
+        <!-- Character Cards Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" id="character-grid">
+          <!-- Populated by JavaScript -->
+        </div>
+
+        <!-- Selected Character Summary & Confirm -->
+        <div id="selection-footer" class="glass-panel-gold p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4 hidden">
+          <div class="flex items-center gap-4">
+            <div id="sel-avatar-preview" class="w-14 h-14 rounded-xl border border-amber-400/50 flex items-center justify-center bg-slate-900/80 text-3xl"></div>
+            <div>
+              <h4 id="sel-name" class="font-title font-bold text-lg text-amber-200"></h4>
+              <p id="sel-role" class="text-xs text-slate-300"></p>
+            </div>
+          </div>
+          <button id="btn-confirm-char" class="w-full sm:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold tracking-wide shadow-glowGold transition transform active:scale-95">
+            Confirmar Seleção
+          </button>
+        </div>
+      </section>
+
+      <!-- SCREEN 3: COMBAT ARENA -->
+      <section id="screen-battle" class="w-full max-w-6xl space-y-6 hidden animate-fade-in">
+        
+        <!-- Turn Indicator Banner -->
+        <div class="glass-panel p-3 rounded-xl flex justify-between items-center px-6 border-amber-400/30">
+          <div id="turn-badge" class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/40">
+            Turno 1 - Jogador 1
+          </div>
+          <div id="initiative-info" class="text-xs text-slate-400 flex items-center gap-2">
+            <i class="fa-solid fa-bolt text-amber-400"></i> Ordem de Ataque por Iniciativa
+          </div>
+        </div>
+
+        <!-- Arena Battleground -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 relative min-h-[360px] items-stretch">
+          
+          <!-- PLAYER 1 CARD -->
+          <div id="p1-card" class="glass-panel p-6 rounded-2xl flex flex-col justify-between relative transition duration-300 border-2 border-amber-400/30">
+            <!-- Active Glow Indicator -->
+            <div id="p1-active-indicator" class="absolute -top-3 left-6 bg-amber-400 text-slate-950 font-bold text-xs px-3 py-1 rounded-full shadow-glowGold uppercase tracking-wider hidden">
+              Sua Vez de Atacar
+            </div>
+
+            <div>
+              <div class="flex items-start justify-between gap-4 mb-4">
+                <div class="flex items-center gap-4">
+                  <div id="p1-avatar" class="w-20 h-20 rounded-2xl border-2 border-amber-400/40 bg-slate-900/80 flex items-center justify-center text-4xl shadow-md"></div>
+                  <div>
+                    <span id="p1-player-label" class="text-xs font-semibold text-amber-400 tracking-wider uppercase">Jogador 1</span>
+                    <h3 id="p1-name" class="font-title text-xl font-bold text-slate-100"></h3>
+                    <div id="p1-buffs" class="flex gap-1.5 mt-1 min-h-[20px]"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- HP Bar -->
+              <div class="space-y-1.5 mb-4">
+                <div class="flex justify-between text-xs font-bold">
+                  <span class="text-slate-300"><i class="fa-solid fa-heart text-red-400 mr-1"></i> Vida</span>
+                  <span id="p1-hp-text" class="text-amber-300">100 / 100</span>
+                </div>
+                <div class="w-full h-4 bg-slate-900/90 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                  <div id="p1-hp-bar" class="h-full bg-gradient-to-r from-red-500 via-amber-400 to-emerald-400 rounded-full stat-bar-fill" style="width: 100%;"></div>
+                </div>
+              </div>
+
+              <!-- Armor & Stats Bar -->
+              <div class="grid grid-cols-3 gap-2 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800 text-center text-xs">
+                <div>
+                  <span class="text-slate-400 block text-[10px]">ATAQUE</span>
+                  <span id="p1-stat-atk" class="font-bold text-slate-200">0</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block text-[10px]">DEFESA</span>
+                  <span id="p1-stat-def" class="font-bold text-sky-300">0</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block text-[10px]">INICIATIVA</span>
+                  <span id="p1-stat-ini" class="font-bold text-amber-300">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Skill Action Buttons P1 -->
+            <div id="p1-actions" class="grid grid-cols-3 gap-2 mt-6">
+              <!-- JS Populates Buttons -->
+            </div>
+          </div>
+
+          <!-- VS DIVIDER BADGE (Desktop) -->
+          <div class="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full glass-panel border border-amber-400/50 items-center justify-center font-title text-amber-300 font-extrabold text-sm shadow-glowGold">
+            VS
+          </div>
+
+          <!-- PLAYER 2 / BOT CARD -->
+          <div id="p2-card" class="glass-panel p-6 rounded-2xl flex flex-col justify-between relative transition duration-300 border-2 border-slate-700/50">
+            <!-- Active Glow Indicator -->
+            <div id="p2-active-indicator" class="absolute -top-3 right-6 bg-emerald-400 text-slate-950 font-bold text-xs px-3 py-1 rounded-full shadow-glowCyan uppercase tracking-wider hidden">
+              Sua Vez de Atacar
+            </div>
+
+            <div>
+              <div class="flex items-start justify-between gap-4 mb-4">
+                <div class="flex items-center gap-4">
+                  <div id="p2-avatar" class="w-20 h-20 rounded-2xl border-2 border-emerald-400/40 bg-slate-900/80 flex items-center justify-center text-4xl shadow-md"></div>
+                  <div>
+                    <span id="p2-player-label" class="text-xs font-semibold text-emerald-400 tracking-wider uppercase">Jogador 2</span>
+                    <h3 id="p2-name" class="font-title text-xl font-bold text-slate-100"></h3>
+                    <div id="p2-buffs" class="flex gap-1.5 mt-1 min-h-[20px]"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- HP Bar -->
+              <div class="space-y-1.5 mb-4">
+                <div class="flex justify-between text-xs font-bold">
+                  <span class="text-slate-300"><i class="fa-solid fa-heart text-red-400 mr-1"></i> Vida</span>
+                  <span id="p2-hp-text" class="text-amber-300">100 / 100</span>
+                </div>
+                <div class="w-full h-4 bg-slate-900/90 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                  <div id="p2-hp-bar" class="h-full bg-gradient-to-r from-red-500 via-amber-400 to-emerald-400 rounded-full stat-bar-fill" style="width: 100%;"></div>
+                </div>
+              </div>
+
+              <!-- Armor & Stats Bar -->
+              <div class="grid grid-cols-3 gap-2 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800 text-center text-xs">
+                <div>
+                  <span class="text-slate-400 block text-[10px]">ATAQUE</span>
+                  <span id="p2-stat-atk" class="font-bold text-slate-200">0</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block text-[10px]">DEFESA</span>
+                  <span id="p2-stat-def" class="font-bold text-sky-300">0</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block text-[10px]">INICIATIVA</span>
+                  <span id="p2-stat-ini" class="font-bold text-amber-300">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Skill Action Buttons P2 -->
+            <div id="p2-actions" class="grid grid-cols-3 gap-2 mt-6">
+              <!-- JS Populates Buttons -->
+            </div>
+          </div>
+
+        </div>
+
+        <!-- COMBAT LOG PANEL -->
+        <div class="glass-panel p-4 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-800">
+            <h4 class="font-title text-sm font-bold text-slate-300 flex items-center gap-2">
+              <i class="fa-solid fa-scroll text-amber-400"></i> Diário de Combate
+            </h4>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest">Sky Chronicle</span>
+          </div>
+          <div id="combat-log" class="h-28 overflow-y-auto space-y-1.5 text-xs text-slate-300 pr-2">
+            <!-- Combat log entries inserted here -->
+          </div>
+        </div>
+
+      </section>
+
+      <!-- SCREEN 4: VICTORY MODAL -->
+      <div id="modal-victory" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden animate-fade-in">
+        <div class="glass-panel-gold p-8 rounded-3xl max-w-md w-full text-center space-y-6 border-2 border-amber-400/50 shadow-glowGold">
+          <div class="w-20 h-20 rounded-full bg-amber-400/20 border-2 border-amber-400 flex items-center justify-center mx-auto text-amber-300 text-4xl shadow-glowGold">
+            <i class="fa-solid fa-crown"></i>
+          </div>
+          
+          <div class="space-y-2">
+            <h3 id="vic-title" class="font-title text-3xl font-extrabold text-amber-200">
+              Vitória Celestial!
+            </h3>
+            <p id="vic-desc" class="text-slate-300 text-sm">
+              O jogador venceu o duelo.
+            </p>
+          </div>
+
+          <div class="pt-2 space-y-3">
+            <button onclick="restartMatch()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold tracking-wider shadow-glowGold transition">
+              <i class="fa-solid fa-rotate-right mr-2"></i> Jogar Novamente
+            </button>
+            <button onclick="goToMenu()" class="w-full py-3 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-600 text-slate-300 font-semibold text-sm transition">
+              Voltar ao Menu Principal
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="p-3 text-center text-xs text-slate-500 border-t border-slate-900 glass-panel">
+      Universo <strong class="text-slate-400">Filhos da Luz</strong> &copy; RPG de Turnos em HTML/CSS/JS Vanilla
+    </footer>
+
+  </div>
+
+  <!-- JAVASCRIPT GAME LOGIC -->
+  <script>
+    /* ==========================================================================
+       DATA: CHARACTERS DEFINITION (FILHOS DA LUZ)
+       ========================================================================== */
+    const CHARACTERS = [
+      {
+        id: 'viajante',
+        name: 'Viajante',
+        title: 'Protagonista de Luz',
+        avatarSVG: `<svg viewBox="0 0 100 100" class="w-full h-full"><circle cx="50" cy="50" r="45" fill="#1e293b" stroke="#f6d365" stroke-width="2"/><path d="M50 20 L58 40 L80 40 L62 52 L68 74 L50 60 L32 74 L38 52 L20 40 L42 40 Z" fill="#fda085"/><circle cx="50" cy="45" r="12" fill="#fff" opacity="0.9"/><path d="M30 65 Q50 85 70 65" stroke="#f6d365" stroke-width="4" fill="none"/></svg>`,
+        stats: {
+          hp: 120,
+          maxHp: 120,
+          atk: 22,
+          ini: 15,
+          def: 8,
+          crit: 15 // %
+        },
+        skills: {
+          basic: {
+            name: 'Voo de Luz',
+            desc: 'Ataque rápido com chamas celestiais.',
+            mult: 1.0,
+            cooldown: 0
+          },
+          alt: {
+            name: 'Chama Protetora',
+            desc: 'Aumenta a Armadura em +12 por 2 turnos e recupera 15 de HP.',
+            type: 'buff',
+            armorGain: 12,
+            heal: 15,
+            cooldown: 3
+          },
+          spec: {
+            name: 'Luz Estelar',
+            desc: 'Ataque devastador de energia pura com alta chance crítica.',
+            mult: 2.1,
+            critBonus: 25,
+            cooldown: 4
+          }
+        }
+      },
+      {
+        id: 'ilf_alvorecer',
+        name: 'Ancião da Ilha do Alvorecer',
+        title: 'Guardião do Primeiro Raio',
+        avatarSVG: `<svg viewBox="0 0 100 100" class="w-full h-full"><circle cx="50" cy="50" r="45" fill="#1e1b4b" stroke="#fbbf24" stroke-width="2"/><path d="M50 15 L65 35 L85 50 L65 65 L50 85 L35 65 L15 50 L35 35 Z" fill="#d97706" opacity="0.7"/><circle cx="50" cy="50" r="16" fill="#fef08a"/><path d="M50 30 L50 70 M30 50 L70 50" stroke="#b45309" stroke-width="3"/></svg>`,
+        stats: {
+          hp: 145,
+          maxHp: 145,
+          atk: 18,
+          ini: 10,
+          def: 15,
+          crit: 10
+        },
+        skills: {
+          basic: {
+            name: 'Golpe de Cajado',
+            desc: 'Impacto radiante e firme.',
+            mult: 1.0,
+            cooldown: 0
+          },
+          alt: {
+            name: 'Aura da Alvorada',
+            desc: 'Cria um escudo sagrado de +25 de Defesa por 2 turnos.',
+            type: 'buff',
+            armorGain: 25,
+            heal: 0,
+            cooldown: 3
+          },
+          spec: {
+            name: 'Julgamento Solene',
+            desc: 'Libera o poder ancestral convertendo Defesa em Dano extra.',
+            mult: 1.8,
+            useDefAsBonus: true,
+            cooldown: 4
+          }
+        }
+      },
+      {
+        id: 'campina_aurora',
+        name: 'Ancião da Campina da Aurora',
+        title: 'Mestre das Borboletas de Luz',
+        avatarSVG: `<svg viewBox="0 0 100 100" class="w-full h-full"><circle cx="50" cy="50" r="45" fill="#064e3b" stroke="#34d399" stroke-width="2"/><path d="M50 50 Q20 20 20 45 Q20 70 50 50 Q80 20 80 45 Q80 70 50 50 Z" fill="#6ee7b7" opacity="0.8"/><circle cx="50" cy="50" r="10" fill="#fef08a"/></svg>`,
+        stats: {
+          hp: 110,
+          maxHp: 110,
+          atk: 24,
+          ini: 22,
+          def: 6,
+          crit: 25
+        },
+        skills: {
+          basic: {
+            name: 'Enxame Luminoso',
+            desc: 'Ataque veloz com borboletas reluzentes.',
+            mult: 0.95,
+            cooldown: 0
+          },
+          alt: {
+            name: 'Vento Favorável',
+            desc: 'Eleva a Iniciativa em +8 e Chance Crítica em +20% por 2 turnos.',
+            type: 'buff_speed',
+            iniGain: 8,
+            critGain: 20,
+            cooldown: 3
+          },
+          spec: {
+            name: 'Vendaval da Aurora',
+            desc: 'Tornado de borboletas douradas com chance de dano crítico massivo.',
+            mult: 2.3,
+            cooldown: 4
+          }
+        }
+      },
+      {
+        id: 'floresta_oculta',
+        name: 'Ancião da Floresta Oculta',
+        title: 'Mística da Chuva e Medusas',
+        avatarSVG: `<svg viewBox="0 0 100 100" class="w-full h-full"><circle cx="50" cy="50" r="45" fill="#064e3b" stroke="#38ef7d" stroke-width="2"/><path d="M30 40 Q50 15 70 40 Q70 65 50 60 Q30 65 30 40 Z" fill="#a7f3d0" opacity="0.8"/><path d="M40 60 L40 80 M50 60 L50 85 M60 60 L60 80" stroke="#34d399" stroke-width="3" stroke-dasharray="2 2"/></svg>`,
+        stats: {
+          hp: 135,
+          maxHp: 135,
+          atk: 19,
+          ini: 12,
+          def: 11,
+          crit: 12
+        },
+        skills: {
+          basic: {
+            name: 'Gota de Orvalho',
+            desc: 'Ataque d\'água que transpassa defesas leves.',
+            mult: 1.0,
+            cooldown: 0
+          },
+          alt: {
+            name: 'Bênção da Medusa',
+            desc: 'Regenera +30 de Vida imediatamente.',
+            type: 'heal',
+            healAmount: 30,
+            cooldown: 3
+          },
+          spec: {
+            name: 'Tempestade Renovadora',
+            desc: 'Chuva torrencial que causa dano ao rival e cura +15 de HP.',
+            mult: 1.7,
+            drainHeal: 15,
+            cooldown: 4
+          }
+        }
+      },
+      {
+        id: 'sertao_dourado',
+        name: 'Ancião do Sertão Dourado',
+        title: 'Guerreiro de Armadura e Lança',
+        avatarSVG: `<svg viewBox="0 0 100 100" class="w-full h-full"><circle cx="50" cy="50" r="45" fill="#14532d" stroke="#22c55e" stroke-width="2"/><path d="M50 15 L62 40 L50 90 L38 40 Z" fill="#15803d"/><path d="M25 35 L75 35 L50 50 Z" fill="#4ade80"/><circle cx="50" cy="40" r="6" fill="#fef08a"/></svg>`,
+        stats: {
+          hp: 130,
+          maxHp: 130,
+          atk: 26,
+          ini: 14,
+          def: 10,
+          crit: 18
+        },
+        skills: {
+          basic: {
+            name: 'Estocada Sombria',
+            desc: 'Perfuração potente com a lança militar.',
+            mult: 1.1,
+            cooldown: 0
+          },
+          alt: {
+            name: 'Fênix Negra',
+            desc: 'Sacrifica 10 de HP para aumentar Ataque em +10 por 2 turnos.',
+            type: 'self_buff',
+            hpCost: 10,
+            atkGain: 10,
+            cooldown: 3
+          },
+          spec: {
+            name: 'Perfuração do Dragão',
+            desc: 'Golpe brutal que ignora 50% da Armadura do inimigo.',
+            mult: 2.2,
+            ignoreArmorPercent: 0.5,
+            cooldown: 4
+          }
+        }
+      },
+      {
+        id: 'geisha_nightmares',
+        name: 'Gueisha de Little Nightmares',
+        title: 'Sombra das Máscaras e Ilusões',
+        avatarSVG: `<svg viewBox="0 0 100 100" class="w-full h-full"><circle cx="50" cy="50" r="45" fill="#020617" stroke="#94a3b8" stroke-width="2"/><path d="M50 20 Q75 20 75 75 L25 75 Q25 20 50 20 Z" fill="#1e293b"/><ellipse cx="50" cy="45" rx="14" ry="18" fill="#f8fafc"/><circle cx="44" cy="42" r="2" fill="#020617"/><circle cx="56" cy="42" r="2" fill="#020617"/><path d="M45 54 Q50 58 55 54" stroke="#991b1b" stroke-width="2" fill="none"/></svg>`,
+        stats: {
+          hp: 115,
+          maxHp: 115,
+          atk: 25,
+          ini: 18,
+          def: 7,
+          crit: 30
+        },
+        skills: {
+          basic: {
+            name: 'Toque Espectral',
+            desc: 'Ataque sombrio focado em pontos vitais.',
+            mult: 1.0,
+            cooldown: 0
+          },
+          alt: {
+            name: 'Canto do Pesadelo',
+            desc: 'Aterroriza o oponente, reduzindo a Defesa dele em -8 por 2 turnos.',
+            type: 'debuff',
+            defReduce: 8,
+            cooldown: 3
+          },
+          spec: {
+            name: 'Dança das Sombras',
+            desc: 'Ataque ilusório de alta precisão que rouba vida.',
+            mult: 2.0,
+            lifestealPercent: 0.4,
+            cooldown: 4
+          }
+        }
+      }
+    ];
+
+    /* ==========================================================================
+       AUDIO SYSTEM (WEB AUDIO API SYNTHESIZER)
+       ========================================================================== */
+    class SoundSystem {
+      constructor() {
+        this.enabled = true;
+        this.ctx = null;
+      }
+
+      initCtx() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+      }
+
+      playHit() {
+        if (!this.enabled) return;
+        this.initCtx();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.2);
+
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.2);
+      }
+
+      playBuff() {
+        if (!this.enabled) return;
+        this.initCtx();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.3);
+
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.3);
+      }
+
+      playCrit() {
+        if (!this.enabled) return;
+        this.initCtx();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(880, this.ctx.currentTime + 0.35);
+
+        gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.35);
+      }
+    }
+
+    const sound = new SoundSystem();
+
+    /* ==========================================================================
+       GAME STATE & ENGINE
+       ========================================================================== */
+    let gameMode = 'pve'; // 'pve' or 'pvp'
+    let selectingPlayer = 1; // 1 or 2
+    let p1SelectedChar = null;
+    let p2SelectedChar = null;
+    let tempSelectedChar = null;
+
+    let gameState = {
+      turn: 1,
+      activePlayer: 1, // 1 or 2
+      isGameOver: false,
+      p1: null,
+      p2: null
+    };
+
+    /* ==========================================================================
+       UI NAVIGATION & RENDERING
+       ========================================================================== */
+    const screenMenu = document.getElementById('screen-menu');
+    const screenSelect = document.getElementById('screen-select');
+    const screenBattle = document.getElementById('screen-battle');
+    const modalVictory = document.getElementById('modal-victory');
+    const btnBackHome = document.getElementById('btn-back-home');
+
+    function showScreen(screen) {
+      screenMenu.classList.add('hidden');
+      screenSelect.classList.add('hidden');
+      screenBattle.classList.add('hidden');
+      screen.classList.remove('hidden');
+
+      if (screen !== screenMenu) {
+        btnBackHome.classList.remove('hidden');
+      } else {
+        btnBackHome.classList.add('hidden');
+      }
+    }
+
+    function selectMode(mode) {
+      gameMode = mode;
+      selectingPlayer = 1;
+      p1SelectedChar = null;
+      p2SelectedChar = null;
+      tempSelectedChar = null;
+      
+      document.getElementById('selection-footer').classList.add('hidden');
+      updateSelectTitle();
+      renderCharacterGrid();
+      showScreen(screenSelect);
+    }
+
+    function updateSelectTitle() {
+      const title = document.getElementById('select-title');
+      if (gameMode === 'pve') {
+        title.innerHTML = `Escolha seu Personagem da Luz`;
+      } else {
+        title.innerHTML = `Jogador ${selectingPlayer}: Escolha seu Personagem`;
+      }
+    }
+
+    function renderCharacterGrid() {
+      const grid = document.getElementById('character-grid');
+      grid.innerHTML = '';
+
+      CHARACTERS.forEach(char => {
+        const card = document.createElement('div');
+        card.className = `glass-panel p-5 rounded-2xl border border-slate-700/60 hover:border-amber-400/60 cursor-pointer transition-all duration-200 transform hover:-translate-y-1 flex flex-col justify-between group`;
+        card.onclick = () => highlightCharacter(char, card);
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-14 h-14 rounded-xl bg-slate-900/80 border border-amber-400/30 flex items-center justify-center p-1 group-hover:scale-105 transition">
+                ${char.avatarSVG}
+              </div>
+              <div>
+                <h3 class="font-title font-bold text-lg text-amber-200">${char.name}</h3>
+                <p class="text-xs text-slate-400">${char.title}</p>
+              </div>
+            </div>
+
+            <!-- Stats grid -->
+            <div class="grid grid-cols-2 gap-2 text-xs bg-slate-900/40 p-2.5 rounded-xl border border-slate-800 mb-3">
+              <div><span class="text-slate-400">Vida:</span> <strong class="text-red-400">${char.stats.hp}</strong></div>
+              <div><span class="text-slate-400">Ataque:</span> <strong class="text-amber-300">${char.stats.atk}</strong></div>
+              <div><span class="text-slate-400">Iniciativa:</span> <strong class="text-emerald-300">${char.stats.ini}</strong></div>
+              <div><span class="text-slate-400">Armadura:</span> <strong class="text-sky-300">${char.stats.def}</strong></div>
+            </div>
+
+            <!-- Skills List Preview -->
+            <div class="space-y-1.5 text-xs">
+              <div class="text-slate-300"><i class="fa-solid fa-burst text-amber-400 mr-1"></i> <strong>Básico:</strong> ${char.skills.basic.name}</div>
+              <div class="text-slate-300"><i class="fa-solid fa-shield-halved text-sky-400 mr-1"></i> <strong>Apoio:</strong> ${char.skills.alt.name}</div>
+              <div class="text-slate-300"><i class="fa-solid fa-wand-magic-sparkles text-purple-400 mr-1"></i> <strong>Especial:</strong> ${char.skills.spec.name}</div>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function highlightCharacter(char, cardEl) {
+      document.querySelectorAll('#character-grid > div').forEach(el => {
+        el.classList.remove('border-amber-400', 'bg-amber-400/10', 'shadow-glowGold');
+      });
+      cardEl.classList.add('border-amber-400', 'bg-amber-400/10', 'shadow-glowGold');
+
+      tempSelectedChar = char;
+      const footer = document.getElementById('selection-footer');
+      footer.classList.remove('hidden');
+      document.getElementById('sel-avatar-preview').innerHTML = char.avatarSVG;
+      document.getElementById('sel-name').textContent = char.name;
+      document.getElementById('sel-role').textContent = `${char.title} • ${char.stats.hp} HP | ${char.stats.atk} ATK | ${char.stats.ini} INI`;
+    }
+
+    document.getElementById('btn-confirm-char').onclick = () => {
+      if (!tempSelectedChar) return;
+
+      if (selectingPlayer === 1) {
+        p1SelectedChar = tempSelectedChar;
+        if (gameMode === 'pve') {
+          // Pick random opponent for PvE
+          const availableBots = CHARACTERS.filter(c => c.id !== p1SelectedChar.id);
+          p2SelectedChar = availableBots[Math.floor(Math.random() * availableBots.length)];
+          startBattle();
+        } else {
+          // Player 2 needs to select
+          selectingPlayer = 2;
+          tempSelectedChar = null;
+          document.getElementById('selection-footer').classList.add('hidden');
+          updateSelectTitle();
+          renderCharacterGrid();
+        }
+      } else {
+        p2SelectedChar = tempSelectedChar;
+        startBattle();
+      }
+    };
+
+    /* ==========================================================================
+       BATTLE ENGINE & LOGIC
+       ========================================================================== */
+    function createCombatantInstance(charData) {
+      return {
+        ...charData,
+        currentHp: charData.stats.hp,
+        currentDef: charData.stats.def,
+        currentAtk: charData.stats.atk,
+        currentIni: charData.stats.ini,
+        currentCrit: charData.stats.crit,
+        cooldowns: { alt: 0, spec: 0 },
+        buffs: [] // Array of active temporary effects
+      };
+    }
+
+    function startBattle() {
+      gameState.isGameOver = false;
+      gameState.turn = 1;
+      gameState.p1 = createCombatantInstance(p1SelectedChar);
+      gameState.p2 = createCombatantInstance(p2SelectedChar);
+
+      // Determine who goes first based on Initiative
+      if (gameState.p1.currentIni >= gameState.p2.currentIni) {
+        gameState.activePlayer = 1;
+      } else {
+        gameState.activePlayer = 2;
+      }
+
+      showScreen(screenBattle);
+      document.getElementById('combat-log').innerHTML = '';
+      logMessage(`A batalha começou entre <strong>${gameState.p1.name}</strong> e <strong>${gameState.p2.name}</strong>!`, 'text-amber-300');
+
+      if (gameState.p1.currentIni >= gameState.p2.currentIni) {
+        logMessage(`<strong>${gameState.p1.name}</strong> ataca primeiro devido à maior Iniciativa (${gameState.p1.currentIni} vs ${gameState.p2.currentIni}).`, 'text-slate-400');
+      } else {
+        logMessage(`<strong>${gameState.p2.name}</strong> ataca primeiro devido à maior Iniciativa (${gameState.p2.currentIni} vs ${gameState.p1.currentIni}).`, 'text-slate-400');
+      }
+
+      updateBattleUI();
+      checkBotTurn();
+    }
+
+    function updateBattleUI() {
+      const { p1, p2, activePlayer } = gameState;
+
+      // Labels & Avatars
+      document.getElementById('p1-name').textContent = p1.name;
+      document.getElementById('p1-avatar').innerHTML = p1.avatarSVG;
+      document.getElementById('p1-hp-text').textContent = `${Math.max(0, p1.currentHp)} / ${p1.stats.hp}`;
+      document.getElementById('p1-hp-bar').style.width = `${Math.max(0, (p1.currentHp / p1.stats.hp) * 100)}%`;
+      document.getElementById('p1-stat-atk').textContent = p1.currentAtk;
+      document.getElementById('p1-stat-def').textContent = p1.currentDef;
+      document.getElementById('p1-stat-ini').textContent = p1.currentIni;
+
+      document.getElementById('p2-name').textContent = p2.name;
+      document.getElementById('p2-avatar').innerHTML = p2.avatarSVG;
+      document.getElementById('p2-hp-text').textContent = `${Math.max(0, p2.currentHp)} / ${p2.stats.hp}`;
+      document.getElementById('p2-hp-bar').style.width = `${Math.max(0, (p2.currentHp / p2.stats.hp) * 100)}%`;
+      document.getElementById('p2-stat-atk').textContent = p2.currentAtk;
+      document.getElementById('p2-stat-def').textContent = p2.currentDef;
+      document.getElementById('p2-stat-ini').textContent = p2.currentIni;
+
+      if (gameMode === 'pve') {
+        document.getElementById('p2-player-label').textContent = 'Guardião (IA)';
+      } else {
+        document.getElementById('p2-player-label').textContent = 'Jogador 2';
+      }
+
+      // Active Indicators
+      const badge = document.getElementById('turn-badge');
+      const activeName = activePlayer === 1 ? p1.name : p2.name;
+      badge.textContent = `Turno ${gameState.turn} - Vez de ${activeName}`;
+
+      if (activePlayer === 1) {
+        document.getElementById('p1-active-indicator').classList.remove('hidden');
+        document.getElementById('p2-active-indicator').classList.add('hidden');
+        document.getElementById('p1-card').classList.add('border-amber-400', 'shadow-glowGold');
+        document.getElementById('p2-card').classList.remove('border-emerald-400', 'shadow-glowCyan');
+      } else {
+        document.getElementById('p2-active-indicator').classList.remove('hidden');
+        document.getElementById('p1-active-indicator').classList.add('hidden');
+        document.getElementById('p2-card').classList.add('border-emerald-400', 'shadow-glowCyan');
+        document.getElementById('p1-card').classList.remove('border-amber-400', 'shadow-glowGold');
+      }
+
+      // Buffs Rendering
+      renderBuffs('p1-buffs', p1);
+      renderBuffs('p2-buffs', p2);
+
+      // Render Action Buttons
+      renderActionButtons('p1-actions', p1, 1);
+      renderActionButtons('p2-actions', p2, 2);
+    }
+
+    function renderBuffs(containerId, combatant) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      combatant.buffs.forEach(b => {
+        const span = document.createElement('span');
+        span.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/40';
+        span.textContent = `${b.name} (${b.duration}t)`;
+        container.appendChild(span);
+      });
+    }
+
+    function renderActionButtons(containerId, combatant, playerNum) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+
+      const isTurn = (gameState.activePlayer === playerNum) && !gameState.isGameOver;
+      const isBot = (gameMode === 'pve' && playerNum === 2);
+
+      const skills = [
+        { key: 'basic', data: combatant.skills.basic, cd: 0, icon: 'fa-burst', col: 'from-amber-500 to-amber-600' },
+        { key: 'alt', data: combatant.skills.alt, cd: combatant.cooldowns.alt, icon: 'fa-shield-halved', col: 'from-sky-500 to-blue-600' },
+        { key: 'spec', data: combatant.skills.spec, cd: combatant.cooldowns.spec, icon: 'fa-wand-magic-sparkles', col: 'from-purple-500 to-indigo-600' }
+      ];
+
+      skills.forEach(s => {
+        const btn = document.createElement('button');
+        const isDisabled = !isTurn || isBot || s.cd > 0;
+
+        btn.className = `p-2.5 rounded-xl flex flex-col items-center justify-center text-center transition text-xs font-bold border border-slate-700/80 ${
+          isDisabled 
+            ? 'bg-slate-800/40 text-slate-500 cursor-not-allowed border-slate-800' 
+            : `bg-gradient-to-b ${s.col} text-slate-950 hover:brightness-110 active:scale-95 shadow-md`
+        }`;
+
+        btn.disabled = isDisabled;
+        btn.onclick = () => executeSkill(playerNum, s.key);
+
+        btn.innerHTML = `
+          <div class="flex items-center gap-1.5 mb-1">
+            <i class="fa-solid ${s.icon}"></i>
+            <span>${s.data.name}</span>
+          </div>
+          <span class="text-[10px] opacity-80">${s.cd > 0 ? `Aguarde ${s.cd}t` : 'Pronto'}</span>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    function logMessage(msg, colorClass = 'text-slate-300') {
+      const log = document.getElementById('combat-log');
+      const p = document.createElement('p');
+      p.className = `${colorClass} leading-relaxed`;
+      p.innerHTML = `• ${msg}`;
+      log.appendChild(p);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    /* ==========================================================================
+       SKILL EXECUTION & COMBAT LOGIC
+       ========================================================================== */
+    function executeSkill(attackerNum, skillKey) {
+      if (gameState.isGameOver) return;
+
+      const attacker = attackerNum === 1 ? gameState.p1 : gameState.p2;
+      const defender = attackerNum === 1 ? gameState.p2 : gameState.p1;
+      const skill = attacker.skills[skillKey];
+
+      // Visual trigger
+      const attackerCard = document.getElementById(`p${attackerNum}-card`);
+      const defenderCard = document.getElementById(`p${attackerNum === 1 ? 2 : 1}-card`);
+      attackerCard.classList.add(attackerNum === 1 ? 'anim-attack-p1' : 'anim-attack-p2');
+      setTimeout(() => attackerCard.classList.remove('anim-attack-p1', 'anim-attack-p2'), 450);
+
+      // Handle Skill Cooldown Setup
+      if (skillKey === 'alt') attacker.cooldowns.alt = skill.cooldown;
+      if (skillKey === 'spec') attacker.cooldowns.spec = skill.cooldown;
+
+      // Handle Buff Skills
+      if (skill.type === 'buff' || skill.type === 'buff_speed' || skill.type === 'self_buff') {
+        sound.playBuff();
+
+        if (skill.armorGain) {
+          attacker.currentDef += skill.armorGain;
+          attacker.buffs.push({ name: 'Escudo', duration: 2, stat: 'def', val: skill.armorGain });
+        }
+        if (skill.heal) {
+          attacker.currentHp = Math.min(attacker.stats.hp, attacker.currentHp + skill.heal);
+        }
+        if (skill.iniGain) {
+          attacker.currentIni += skill.iniGain;
+          attacker.buffs.push({ name: 'Agilidade', duration: 2, stat: 'ini', val: skill.iniGain });
+        }
+        if (skill.critGain) {
+          attacker.currentCrit += skill.critGain;
+          attacker.buffs.push({ name: 'Foco Crítico', duration: 2, stat: 'crit', val: skill.critGain });
+        }
+        if (skill.hpCost) {
+          attacker.currentHp = Math.max(1, attacker.currentHp - skill.hpCost);
+        }
+        if (skill.atkGain) {
+          attacker.currentAtk += skill.atkGain;
+          attacker.buffs.push({ name: 'Fúria', duration: 2, stat: 'atk', val: skill.atkGain });
+        }
+
+        logMessage(`<strong>${attacker.name}</strong> usou <strong>${skill.name}</strong>! ${skill.desc}`, 'text-sky-300');
+      } 
+      // Handle Debuff Skills
+      else if (skill.type === 'debuff') {
+        sound.playBuff();
+        defender.currentDef = Math.max(0, defender.currentDef - skill.defReduce);
+        defender.buffs.push({ name: 'Aterrorizado', duration: 2, stat: 'def', val: -skill.defReduce });
+        logMessage(`<strong>${attacker.name}</strong> usou <strong>${skill.name}</strong> reduzindo a armadura de ${defender.name}!`, 'text-purple-300');
+      }
+      // Handle Direct Heal Skills
+      else if (skill.type === 'heal') {
+        sound.playBuff();
+        attacker.currentHp = Math.min(attacker.stats.hp, attacker.currentHp + skill.healAmount);
+        logMessage(`<strong>${attacker.name}</strong> usou <strong>${skill.name}</strong> e recuperou +${skill.healAmount} de HP!`, 'text-emerald-300');
+      }
+      // Handle Offensive Damage Skills
+      else {
+        defenderCard.classList.add('anim-damage');
+        setTimeout(() => defenderCard.classList.remove('anim-damage'), 400);
+
+        let baseDamage = attacker.currentAtk * (skill.mult || 1.0);
+        
+        // Special modifier for Dawn Elder
+        if (skill.useDefAsBonus) {
+          baseDamage += attacker.currentDef * 0.8;
+        }
+
+        // Armor mitigation
+        let effectiveArmor = defender.currentDef;
+        if (skill.ignoreArmorPercent) {
+          effectiveArmor *= (1 - skill.ignoreArmorPercent);
+        }
+
+        let finalDamage = Math.max(4, Math.round(baseDamage - effectiveArmor));
+
+        // Critical Hit Calculation
+        let totalCritChance = attacker.currentCrit + (skill.critBonus || 0);
+        let isCrit = (Math.random() * 100) < totalCritChance;
+
+        if (isCrit) {
+          finalDamage = Math.round(finalDamage * 1.6);
+          sound.playCrit();
+          logMessage(`💥 <strong>GOLPE CRÍTICO!</strong> <strong>${attacker.name}</strong> desferiu <strong>${finalDamage}</strong> de dano em ${defender.name} com ${skill.name}!`, 'text-amber-300 font-bold');
+        } else {
+          sound.playHit();
+          logMessage(`<strong>${attacker.name}</strong> atacou ${defender.name} com <strong>${skill.name}</strong> causando <strong>${finalDamage}</strong> de dano.`, 'text-slate-200');
+        }
+
+        // Apply Damage
+        defender.currentHp -= finalDamage;
+
+        // Drain / Lifesteal Effects
+        if (skill.drainHeal) {
+          attacker.currentHp = Math.min(attacker.stats.hp, attacker.currentHp + skill.drainHeal);
+        }
+        if (skill.lifestealPercent) {
+          const stolen = Math.round(finalDamage * skill.lifestealPercent);
+          attacker.currentHp = Math.min(attacker.stats.hp, attacker.currentHp + stolen);
+          logMessage(`<strong>${attacker.name}</strong> drenou +${stolen} de HP!`, 'text-purple-300');
+        }
+      }
+
+      // Check KO Victory
+      if (defender.currentHp <= 0) {
+        defender.currentHp = 0;
+        updateBattleUI();
+        endBattle(attackerNum);
+        return;
+      }
+
+      // End of Turn Maintenance
+      endTurn();
+    }
+
+    function endTurn() {
+      // Reduce Cooldowns for Active Player
+      const activeChar = gameState.activePlayer === 1 ? gameState.p1 : gameState.p2;
+      if (activeChar.cooldowns.alt > 0) activeChar.cooldowns.alt--;
+      if (activeChar.cooldowns.spec > 0) activeChar.cooldowns.spec--;
+
+      // Process Buff Durations
+      activeChar.buffs.forEach(b => b.duration--);
+      const expiredBuffs = activeChar.buffs.filter(b => b.duration <= 0);
+      expiredBuffs.forEach(b => {
+        if (b.stat === 'def') activeChar.currentDef -= b.val;
+        if (b.stat === 'ini') activeChar.currentIni -= b.val;
+        if (b.stat === 'crit') activeChar.currentCrit -= b.val;
+        if (b.stat === 'atk') activeChar.currentAtk -= b.val;
+      });
+      activeChar.buffs = activeChar.buffs.filter(b => b.duration > 0);
+
+      // Switch Active Player
+      gameState.activePlayer = gameState.activePlayer === 1 ? 2 : 1;
+      if (gameState.activePlayer === 1) {
+        gameState.turn++;
+      }
+
+      updateBattleUI();
+      checkBotTurn();
+    }
+
+    function checkBotTurn() {
+      if (gameState.isGameOver) return;
+
+      if (gameMode === 'pve' && gameState.activePlayer === 2) {
+        setTimeout(() => {
+          const bot = gameState.p2;
+          let chosenSkill = 'basic';
+
+          // Basic Bot AI Decision
+          if (bot.cooldowns.spec === 0 && Math.random() > 0.3) {
+            chosenSkill = 'spec';
+          } else if (bot.cooldowns.alt === 0 && Math.random() > 0.4) {
+            chosenSkill = 'alt';
+          }
+
+          executeSkill(2, chosenSkill);
+        }, 900);
+      }
+    }
+
+    function endBattle(winnerNum) {
+      gameState.isGameOver = true;
+      const winnerName = winnerNum === 1 ? gameState.p1.name : gameState.p2.name;
+
+      document.getElementById('vic-title').textContent = `Vitória de ${winnerName}!`;
+      document.getElementById('vic-desc').textContent = `${winnerName} dominou o campo celestial do universo Filhos da Luz.`;
+      
+      modalVictory.classList.remove('hidden');
+    }
+
+    function restartMatch() {
+      modalVictory.classList.add('hidden');
+      startBattle();
+    }
+
+    function goToMenu() {
+      modalVictory.classList.add('hidden');
+      showScreen(screenMenu);
+    }
+
+    document.getElementById('btn-back-home').onclick = goToMenu;
+
+    // Sound toggle button
+    document.getElementById('sound-toggle').onclick = function() {
+      sound.enabled = !sound.enabled;
+      this.querySelector('span').textContent = `Som: ${sound.enabled ? 'ON' : 'OFF'}`;
+      this.querySelector('i').className = sound.enabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark';
+    };
+
+    /* ==========================================================================
+       CANVAS CELESTIAL PARTICLES BACKGROUND
+       ========================================================================== */
+    const canvas = document.getElementById('particle-canvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    class Particle {
+      constructor() {
+        this.reset();
+      }
+
+      reset() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.radius = Math.random() * 2.5 + 0.5;
+        this.color = Math.random() > 0.5 ? '#f6d365' : '#38ef7d';
+        this.alpha = Math.random() * 0.6 + 0.2;
+        this.speedY = -(Math.random() * 0.4 + 0.1);
+        this.speedX = (Math.random() - 0.5) * 0.3;
+      }
+
+      update() {
+        this.y += this.speedY;
+        this.x += this.speedX;
+        if (this.y < 0 || this.x < 0 || this.x > canvas.width) {
+          this.reset();
+          this.y = canvas.height + 10;
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = this.color;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    for (let i = 0; i < 45; i++) {
+      particles.push(new Particle());
+    }
+
+    function animateParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach(p => {
+        p.update();
+        p.draw();
+      });
+      requestAnimationFrame(animateParticles);
+    }
+    animateParticles();
+
+  </script>
+</body>
+</html>
